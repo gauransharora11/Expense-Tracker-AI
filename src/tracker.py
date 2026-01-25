@@ -28,3 +28,19 @@ def add_expense():
     conn.close()
 
     print("Expense added successfully ✅")
+
+    #view data
+from src.database import get_connection
+
+def view_expenses(limit=10):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT id, description, amount, category FROM expenses LIMIT ?", (limit,))
+    rows = cur.fetchall()
+
+    conn.close()
+
+    print("\n--- EXPENSES ---")
+    for row in rows:
+        print(row)

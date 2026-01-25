@@ -1,3 +1,3 @@
-from src.tracker import add_expense
+from src.tracker import view_expenses
 
-add_expense()
+view_expenses()
