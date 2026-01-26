@@ -34,3 +34,5 @@ if rows:
     st.table(rows)
 else:
     st.info("No expenses found")
+#source venv/bin/activate
+#streamlit run web_app.py
