@@ -1,46 +1,21 @@
+# src/tracker.py
+
 from src.database import get_connection
+from src.ml.predict import predict_category
 
-def add_expense():
-    # 1. Take input from user
-    amount = float(input("Enter amount: "))
-    category = input("Enter category: ")
 
-    # 2. Connect to database
+def add_expense(description, amount):
+    category = predict_category(description)
+
     conn = get_connection()
     cur = conn.cursor()
 
-    # 3. Create table if it doesn't exist
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS expenses (
-            id INTEGER PRIMARY KEY,
-            amount REAL,
-            category TEXT
-        )
-    """)
-
-    # 4. Insert user data
     cur.execute(
-        "INSERT INTO expenses (amount, category) VALUES (?, ?)",
-        (amount, category)
+        "INSERT INTO expenses (description, amount, category) VALUES (?, ?, ?)",
+        (description, amount, category)
     )
 
     conn.commit()
     conn.close()
 
-    print("Expense added successfully ✅")
-
-    #view data
-from src.database import get_connection
-
-def view_expenses(limit=10):
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute("SELECT id, description, amount, category FROM expenses LIMIT ?", (limit,))
-    rows = cur.fetchall()
-
-    conn.close()
-
-    print("\n--- EXPENSES ---")
-    for row in rows:
-        print(row)
+    print(f"Expense added under category: {category}")
