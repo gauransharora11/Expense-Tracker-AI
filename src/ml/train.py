@@ -1,33 +1,38 @@
-import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.pipeline import Pipeline
 import joblib
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
 
-from src.database import get_connection
+def train():
+    # 1️⃣ Training data (example)
+    texts = [
+        "Bought groceries",
+        "Paid electricity bill",
+        "Movie ticket",
+        "Dinner at restaurant",
+        "Uber ride"
+    ]
 
-def train_model():
-    # 1. Read data from database
-    conn = get_connection()
-    df = pd.read_sql(
-        "SELECT description, category FROM expenses",
-        conn
-    )
-    conn.close()
+    labels = [
+        "Food",
+        "Bills",
+        "Entertainment",
+        "Food",
+        "Travel"
+    ]
 
-    # 2. Create ML pipeline
-    model = Pipeline([
-        ("tfidf", TfidfVectorizer()),
-        ("clf", MultinomialNB())
-    ])
+    # 2️⃣ Convert text → numbers
+    vectorizer = TfidfVectorizer()
+    X = vectorizer.fit_transform(texts)
 
-    # 3. Train model
-    model.fit(df["description"], df["category"])
+    # 3️⃣ CREATE & TRAIN MODEL  ✅ (THIS WAS MISSING)
+    model = LogisticRegression()
+    model.fit(X, labels)
 
-    # 4. Save model
-    joblib.dump(model, "models/expense_classifier.pkl")
+    # 4️⃣ Save model + vectorizer
+    joblib.dump(model, "model/model.pkl")
+    joblib.dump(vectorizer, "model/vectorizer.pkl")
 
     print("ML model trained and saved ✅")
 
 if __name__ == "__main__":
-    train_model()
+    train()
