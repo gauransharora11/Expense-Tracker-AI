@@ -1,38 +1,86 @@
 import streamlit as st
+from src.database import insert_expense, fetch_expenses
+from src.ml.predict import predict_category
 
-from src.tracker import add_expense
-from src.database import get_connection
+# ----------------- PAGE CONFIG -----------------
+st.set_page_config(
+    page_title="Expense Tracker AI",
+    page_icon="💸",
+    layout="centered"
+)
 
+# ----------------- STYLES -----------------
+st.markdown("""
+<style>
+.main-title {
+    font-size: 36px;
+    font-weight: bold;
+}
+.sub-title {
+    color: gray;
+}
+.card {
+    padding: 12px;
+    border-radius: 10px;
+    background-color: #f8f9fa;
+    margin-bottom: 8px;
+}
+</style>
+""", unsafe_allow_html=True)
 
-st.set_page_config(page_title="Expense Tracker AI", layout="centered")
+# ----------------- HEADER -----------------
+st.markdown("<div class='main-title'>💸 Expense Tracker AI</div>", unsafe_allow_html=True)
+st.markdown("<div class='sub-title'>Smart expense tracking with ML-powered categorization</div>", unsafe_allow_html=True)
+st.divider()
 
-st.title("💰 Expense Tracker AI")
+# ----------------- ADD EXPENSE -----------------
+st.subheader("➕ Add New Expense")
 
-st.subheader("Add New Expense")
-
-description = st.text_input("Expense description")
-amount = st.number_input("Amount (₹)", min_value=0.0, step=10.0)
+desc = st.text_input("Expense Description")
+amount = st.number_input("Amount (₹)", min_value=0.0, step=1.0)
 
 if st.button("Add Expense"):
-    if description and amount > 0:
-        add_expense(description, amount)
-        st.success("Expense added successfully!")
+    if desc.strip() == "":
+        st.warning("Please enter a description")
     else:
-        st.error("Please enter valid data")
+        category = predict_category(desc)
+        insert_expense(desc, amount, category)
+        st.success(f"Saved as **{category}**")
 
 st.divider()
 
-st.subheader("📊 Expense History")
+# ----------------- RECENT EXPENSES -----------------
+st.subheader("📊 Recent Expenses")
 
-conn = get_connection()
-cur = conn.cursor()
-cur.execute("SELECT description, amount, category FROM expenses")
-rows = cur.fetchall()
-conn.close()
+if "page" not in st.session_state:
+    st.session_state.page = 0
+
+LIMIT = 10
+OFFSET = st.session_state.page * LIMIT
+
+rows = fetch_expenses(LIMIT, OFFSET)
 
 if rows:
-    st.table(rows)
+    for desc, amt, cat in rows:
+        st.markdown(
+            f"""
+            <div class="card">
+                <b>{desc}</b><br>
+                ₹{amt} — <i>{cat}</i>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 else:
-    st.info("No expenses found")
-#source venv/bin/activate
-#streamlit run web_app.py
+    st.info("No more records")
+
+# ----------------- PAGINATION -----------------
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("⬅ Previous") and st.session_state.page > 0:
+        st.session_state.page -= 1
+
+with col2:
+    if st.button("Next ➡"):
+        st.session_state.page += 1
