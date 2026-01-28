@@ -1,15 +1,22 @@
 import joblib
+from pathlib import Path
 
-def predict():
-    model = joblib.load("model/model.pkl")
-    vectorizer = joblib.load("model/vectorizer.pkl")
+MODEL_PATH = "model/model.pkl"
 
-    text = input("Enter expense description: ")
+def load_model():
+    if not Path(MODEL_PATH).exists():
+        from src.ml.train import train_model
+        train_model()
 
-    text_vector = vectorizer.transform([text])
-    prediction = model.predict(text_vector)
+    return joblib.load(MODEL_PATH)
 
-    print("Predicted Category:", prediction[0])
+model, vectorizer = load_model()
 
-if __name__ == "__main__":
-    predict()
+def predict_category(text):
+    X = vectorizer.transform([text.lower()])
+    probs = model.predict_proba(X)[0]
+
+    if probs.max() < 0.30:
+        return "other"
+
+    return model.classes_[probs.argmax()]

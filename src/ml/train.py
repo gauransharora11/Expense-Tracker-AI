@@ -1,36 +1,48 @@
-# src/ml/train.py
-
+import pandas as pd
+import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-import joblib
-import os
+from pathlib import Path
 
-from src.ml.training_data import get_training_data
+DATA_FILES = [
+    "data/food.csv",
+    "data/travel.csv",
+    "data/shopping.csv",
+    "data/entertainment.csv"
+]
 
-def train():
-    texts, labels = get_training_data()
+MODEL_PATH = "model/model.pkl"
+
+def train_model():
+    dfs = []
+
+    for file in DATA_FILES:
+        if Path(file).exists():
+            dfs.append(pd.read_csv(file))
+
+    if not dfs:
+        raise Exception("❌ No CSV files found")
+
+    data = pd.concat(dfs, ignore_index=True)
+
+    X = data["text"]
+    y = data["category"]
 
     vectorizer = TfidfVectorizer(
         lowercase=True,
-        ngram_range=(1, 2),
-        min_df=1
+        stop_words="english",
+        ngram_range=(1, 2)
     )
 
-    X = vectorizer.fit_transform(texts)
+    X_vec = vectorizer.fit_transform(X)
 
-    model = LogisticRegression(
-        max_iter=1000,
-        class_weight="balanced"
-    )
+    model = LogisticRegression(max_iter=1000)
+    model.fit(X_vec, y)
 
-    model.fit(X, labels)
+    Path("model").mkdir(exist_ok=True)
+    joblib.dump((model, vectorizer), MODEL_PATH)
 
-    os.makedirs("model", exist_ok=True)
-
-    # 🔴 SAVE BOTH TOGETHER (CRITICAL)
-    joblib.dump((model, vectorizer), "model/model.pkl")
-
-    print("✅ ML model trained and saved")
+    print("✅ Model auto-trained and saved")
 
 if __name__ == "__main__":
-    train()
+    train_model()
