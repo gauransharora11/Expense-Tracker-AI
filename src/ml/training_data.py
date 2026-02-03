@@ -8,7 +8,7 @@ def get_training_data():
             "biryani dinner", "coffee cafe", "starbucks coffee"
         ],
         "travel": [
-            "uber ride", "ola cab", "metro ticket",
+            "uber ride", "patola cab", "metro ticket",
             "flight booking", "train ticket", "bus fare"
         ],
         "shopping": [

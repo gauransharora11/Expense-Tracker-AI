@@ -13,10 +13,14 @@ def load_model():
 model, vectorizer = load_model()
 
 def predict_category(text):
+    model, vectorizer = joblib.load("model/model.pkl")
+
     X = vectorizer.transform([text.lower()])
     probs = model.predict_proba(X)[0]
+    max_prob = max(probs)
 
-    if probs.max() < 0.30:
+    if max_prob < 0.30:
         return "other"
 
     return model.classes_[probs.argmax()]
+
