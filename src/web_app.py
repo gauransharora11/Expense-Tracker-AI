@@ -2,7 +2,7 @@ import os
 import joblib
 import numpy as np
 import streamlit as st
-import speech_recognition as sr  # <--- NEW IMPORT
+import speech_recognition as sr
 
 # -----------------------------
 # LOAD MODEL
@@ -10,7 +10,6 @@ import speech_recognition as sr  # <--- NEW IMPORT
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 MODEL_PATH = os.path.join(BASE_DIR, "model", "classifier.pkl")
 
-# Check if model exists before loading
 if not os.path.exists(MODEL_PATH):
     st.error(f"❌ Model not found at {MODEL_PATH}. Please run train.py first.")
     st.stop()
@@ -47,16 +46,14 @@ def get_voice_input():
     """Listens to the microphone and returns text."""
     recognizer = sr.Recognizer()
     with sr.Microphone() as source:
-        st.info("🎤 Listening... Speak clearly now!")
+        print("Listening...") # Prints to terminal for debugging
         try:
-            # Adjust for noise and listen (timeout after 5s)
             recognizer.adjust_for_ambient_noise(source, duration=0.5)
             audio = recognizer.listen(source, timeout=5)
-            
             text = recognizer.recognize_google(audio)
             return text
         except sr.UnknownValueError:
-            st.error("❌ Could not understand audio.")
+            st.warning("❌ Could not understand audio.")
         except sr.RequestError:
             st.error("❌ API unavailable.")
         except sr.WaitTimeoutError:
@@ -66,51 +63,51 @@ def get_voice_input():
     return None
 
 
+# --- NEW: CALLBACK FUNCTION ---
+def handle_voice_update():
+    """Run this BEFORE the page reload to safely update state."""
+    voice_text = get_voice_input()
+    if voice_text:
+        st.session_state['expense_text'] = voice_text
+
+
 # -----------------------------
 # STREAMLIT UI
 # -----------------------------
 st.set_page_config(page_title="Expense Category AI", page_icon="💰")
 st.title("💰 Expense Category Predictor")
 
-# 1. Initialize Session State for the Text Input
+# Initialize session state if it doesn't exist
 if 'expense_text' not in st.session_state:
     st.session_state['expense_text'] = ""
 
-# 2. Layout: Input Box and Voice Button side-by-side
+# Layout
 col1, col2 = st.columns([4, 1])
 
+with col2:
+    st.write("") 
+    st.write("")
+    # FIX: Use 'on_click' to trigger the update safely
+    st.button("🎤 Voice", on_click=handle_voice_update)
+
 with col1:
-    # Binds the text input to session_state so it can be updated by voice
+    # The text input will now auto-fill because the callback updated the state 
+    # BEFORE this widget is rendered.
     user_input = st.text_input(
         "Expense description", 
         key="expense_text", 
         placeholder="eg: adidas shoes from mall"
     )
 
-with col2:
-    # Add some spacing so the button aligns with the text box
-    st.write("") 
-    st.write("")
-    if st.button("🎤 Voice"):
-        voice_text = get_voice_input()
-        if voice_text:
-            # Update the session state with the spoken text
-            st.session_state['expense_text'] = voice_text
-            st.rerun()  # Reload the app to show the new text
-
-# 3. Predict Button
 if st.button("Predict"):
-    txt_to_predict = st.session_state['expense_text']
-    
-    if txt_to_predict.strip() == "":
+    if user_input.strip() == "":
         st.warning("Please enter an expense description.")
     else:
-        category, confidence, score, reason = predict_expense(txt_to_predict)
+        category, confidence, score, reason = predict_expense(user_input)
 
         st.divider()
         st.subheader(f"🏷️ Category: {category}")
         
-        # Display details in columns
         c1, c2, c3 = st.columns(3)
         c1.metric("Confidence", confidence)
         c2.metric("Score", f"{round(score, 3)}")

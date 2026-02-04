@@ -9,3 +9,7 @@ add_expense(desc, amt)
 # source venv/bin/activate
 # python -m src.train
 # python -m src.predict
+#quit
+# burger
+
+
