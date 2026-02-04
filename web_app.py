@@ -1,5 +1,5 @@
 import streamlit as st
-from src.ml.train import train_model
+from src.train import train_model
 from src.ml.predict import predict_category
 
 st.set_page_config(page_title="Expense Tracker AI", layout="wide")
