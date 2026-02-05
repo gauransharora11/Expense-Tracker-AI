@@ -11,7 +11,7 @@ add_expense(desc, amt)
 # python -m src.predict
 #quit
 # burger
-#streamlit run src/web_app.py
+#streamlit run streamlit/web_app.py
 
 
 
