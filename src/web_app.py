@@ -1,114 +1,154 @@
 import os
 import joblib
 import numpy as np
+import pandas as pd
 import streamlit as st
-import speech_recognition as sr
+import sqlite3
+from datetime import datetime
 
 # -----------------------------
-# LOAD MODEL
+# PAGE CONFIG
+# -----------------------------
+st.set_page_config(page_title="Smart Expense AI", page_icon="💸", layout="wide")
+
+# -----------------------------
+# MODERN UI STYLING
+# -----------------------------
+st.markdown("""
+<style>
+body {background-color:#0f172a;}
+.big-title {font-size:34px; font-weight:700;}
+.card {
+    padding:20px;
+    border-radius:14px;
+    background: linear-gradient(145deg,#1e293b,#0f172a);
+    box-shadow:0 4px 12px rgba(0,0,0,0.3);
+    margin-bottom:15px;
+}
+button[kind="primary"] {
+    background-color:#6366f1 !important;
+    border-radius:8px !important;
+    height:3em;
+    transition:0.3s;
+}
+button[kind="primary"]:hover {transform:scale(1.05);}
+</style>
+""", unsafe_allow_html=True)
+
+# -----------------------------
+# DATABASE SETUP (PERMANENT STORAGE)
+# -----------------------------
+conn = sqlite3.connect("expenses.db", check_same_thread=False)
+cursor = conn.cursor()
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS expenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT,
+    description TEXT,
+    category TEXT,
+    amount REAL,
+    confidence TEXT
+)
+""")
+conn.commit()
+
+# -----------------------------
+# LOAD ML MODEL
 # -----------------------------
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 MODEL_PATH = os.path.join(BASE_DIR, "model", "classifier.pkl")
-
-if not os.path.exists(MODEL_PATH):
-    st.error(f"❌ Model not found at {MODEL_PATH}. Please run train.py first.")
-    st.stop()
-
 pipeline = joblib.load(MODEL_PATH)
 
-
 # -----------------------------
-# HELPER FUNCTIONS
+# HELPERS
 # -----------------------------
 def confidence_label(score):
-    if score >= 0.75:
-        return "High"
-    elif score >= 0.50:
-        return "Medium"
-    else:
-        return "Low"
+    if score >= 0.75: return "High"
+    elif score >= 0.50: return "Medium"
+    else: return "Low"
 
 def predict_expense(text, threshold=0.45):
     probs = pipeline.predict_proba([text])[0]
     classes = pipeline.classes_
-
-    best_idx = np.argmax(probs)
-    best_class = classes[best_idx]
-    best_score = probs[best_idx]
-
+    idx = np.argmax(probs)
+    best_class, best_score = classes[idx], probs[idx]
     if best_score < threshold:
-        return "other", confidence_label(best_score), best_score, "Low confidence → fallback to other"
+        return "other", "Low", best_score, probs
+    return best_class, confidence_label(best_score), best_score, probs
 
-    return best_class, confidence_label(best_score), best_score, "Predicted using TF-IDF (word + char)"
-
-
-def get_voice_input():
-    """Listens to the microphone and returns text."""
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        print("Listening...") # Prints to terminal for debugging
-        try:
-            recognizer.adjust_for_ambient_noise(source, duration=0.5)
-            audio = recognizer.listen(source, timeout=5)
-            text = recognizer.recognize_google(audio)
-            return text
-        except sr.UnknownValueError:
-            st.warning("❌ Could not understand audio.")
-        except sr.RequestError:
-            st.error("❌ API unavailable.")
-        except sr.WaitTimeoutError:
-            st.warning("❌ No speech detected.")
-        except Exception as e:
-            st.error(f"Error: {e}")
-    return None
-
-
-# --- NEW: CALLBACK FUNCTION ---
-def handle_voice_update():
-    """Run this BEFORE the page reload to safely update state."""
-    voice_text = get_voice_input()
-    if voice_text:
-        st.session_state['expense_text'] = voice_text
-
+CATEGORY_EMOJI = {"food":"🍔","travel":"🚕","shopping":"🛍️","entertainment":"🎬","other":"📦"}
 
 # -----------------------------
-# STREAMLIT UI
+# SIDEBAR NAVIGATION
 # -----------------------------
-st.set_page_config(page_title="Expense Category AI", page_icon="💰")
-st.title("💰 Expense Category Predictor")
+st.sidebar.title("💸 Smart Expense AI")
+page = st.sidebar.radio("Navigate", ["➕ Add Expense", "📊 Dashboard", "📜 History"])
 
-# Initialize session state if it doesn't exist
-if 'expense_text' not in st.session_state:
-    st.session_state['expense_text'] = ""
+# -----------------------------
+# ADD EXPENSE PAGE
+# -----------------------------
+if page == "➕ Add Expense":
+    st.markdown('<div class="big-title">Add Expense with AI</div>', unsafe_allow_html=True)
 
-# Layout
-col1, col2 = st.columns([4, 1])
+    desc = st.text_input("📝 What did you spend on?")
+    amount = st.number_input("💰 Amount", min_value=0.0, step=1.0)
+    date = st.date_input("📅 Date", datetime.today())
 
-with col2:
-    st.write("") 
-    st.write("")
-    # FIX: Use 'on_click' to trigger the update safely
-    st.button("🎤 Voice", on_click=handle_voice_update)
+    if st.button(" Predict & Save", use_container_width=True):
+        if desc.strip() == "":
+            st.warning("Enter description")
+        else:
+            category, confidence, score, probs = predict_expense(desc)
+            emoji = CATEGORY_EMOJI.get(category,"❓")
 
-with col1:
-    # The text input will now auto-fill because the callback updated the state 
-    # BEFORE this widget is rendered.
-    user_input = st.text_input(
-        "Expense description", 
-        key="expense_text", 
-        placeholder="eg: adidas shoes from mall"
-    )
+            cursor.execute("INSERT INTO expenses (date, description, category, amount, confidence) VALUES (?,?,?,?,?)",
+                           (str(date), desc, category, amount, confidence))
+            conn.commit()
 
-if st.button("Predict"):
-    if user_input.strip() == "":
-        st.warning("Please enter an expense description.")
+            st.success("Expense saved!")
+            st.markdown(f"### {emoji} {category.upper()}")
+            st.progress(min(score,1.0))
+
+# -----------------------------
+# DASHBOARD
+# -----------------------------
+elif page == "📊 Dashboard":
+    st.markdown('<div class="big-title">Expense Dashboard</div>', unsafe_allow_html=True)
+
+    df = pd.read_sql_query("SELECT * FROM expenses", conn)
+
+    if df.empty:
+        st.info("No data yet.")
     else:
-        category, confidence, score, reason = predict_expense(user_input)
+        col1,col2,col3 = st.columns(3)
+        col1.metric("Total Spent", f"${df['amount'].sum():.2f}")
+        col2.metric("Transactions", len(df))
+        col3.metric("Top Category", df['category'].value_counts().idxmax())
 
-        st.divider()
-        st.subheader(f"🏷️ Category: {category}")
-        
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Confidence", confidence)
-        c2.metric("Score", f"{round(score, 3)}")
-        c3.caption(reason)
+        st.markdown("### 📊 Spending by Category")
+        st.bar_chart(df.groupby("category")["amount"].sum())
+
+        st.markdown("### 🥧 Category Distribution")
+        st.pyplot(df.groupby("category")["amount"].sum().plot.pie(autopct="%1.1f%%").figure)
+
+        st.markdown("### 📈 Spending Over Time")
+        df["date"] = pd.to_datetime(df["date"])
+        st.line_chart(df.groupby("date")["amount"].sum())
+
+# -----------------------------
+# HISTORY
+# -----------------------------
+elif page == "📜 History":
+    st.markdown('<div class="big-title">Expense History</div>', unsafe_allow_html=True)
+
+    df = pd.read_sql_query("SELECT * FROM expenses", conn)
+
+    if df.empty:
+        st.info("No expenses recorded.")
+    else:
+        st.dataframe(df, use_container_width=True)
+
+        # DOWNLOAD BUTTON
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button("⬇ Download as Excel", csv, "expenses.csv", "text/csv")
